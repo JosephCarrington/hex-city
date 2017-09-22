@@ -6,6 +6,7 @@ using DG.Tweening;
 
 namespace HexCity {
 	public class GameController : GridBehaviour<GridPoint2, TileCell> {
+		public int seed = 1;
 
 		// Use this for initialization
 		public enum TileType {
@@ -30,39 +31,16 @@ namespace HexCity {
 			
 		public override void InitGrid() {
 			DOTween.Init ();
-			Random.InitState (1);
+			Random.InitState (seed);
 
 			foreach(var point in Grid) {
 				point.cell.gameObject.name = point.point.ToString ();
-				int randomType = Random.Range (0, totalTypes);
-				TileType newType = TileType.Blue;
-				switch (randomType) {
-				case 1: 
-					newType = TileType.Grey;
-					break;
-				case 2: 
-					newType = TileType.Green;
-					break;
-				case 3: 
-					newType = TileType.Purple;
-					break;
-				case 4: 
-					newType = TileType.Red;
-					break;
-				case 5: 
-					newType = TileType.Yellow;
-					break;
-				}
 				TileController thisController = point.cell.GetComponent<TileController> ();
-				thisController.Type = newType;
+				thisController.Type = GetRandomTileType ();
 				thisController.Stage = TileStage.Empty;
 			}
 		}
-
-		public void LogClick(GridPoint2 point) {
 			
-		}
-
 		private int minTilesForMatch = 3;
 		bool clearedTiles = false;
 		GridPoint2? currentTile;
@@ -127,6 +105,7 @@ namespace HexCity {
 		}
 
 		private GridPoint2?[] firstXEmpty;
+
 		public void Settle() {
 			InitClearedArray ();
 			foreach (var p in Grid) {
@@ -148,6 +127,7 @@ namespace HexCity {
 					firstXEmpty [p.point.X] = newPoint;
 				}
 			}
+			AddNewTilesAtTop ();
 		}
 
 		private void InitClearedArray() {
@@ -157,7 +137,96 @@ namespace HexCity {
 			}
 		}
 
+		private List<GameObject> fallingTiles;
+		private void AddNewTilesAtTop() {
+			fallingTiles = new List<GameObject> ();
+			for (int x = 0; x < Grid.Bounds.Extreme.X; x++) {
+				GridPoint2? firstClearedTile = GetFirstClearedTileInColumn (x);
+				while (firstClearedTile.HasValue) {
+					TileController tileController = Grid [firstClearedTile.Value].GetComponent<TileController> ();
+					tileController.Stage = TileStage.Empty;
+					tileController.Type = GetRandomTileType ();
+					tileController.Collected = false;
+					firstClearedTile = GetFirstClearedTileInColumn (x);
+				}
+			}
+		}
 			
+		private TileType GetRandomTileType() {
+			int randomType = Random.Range (0, totalTypes);
+			TileType newType = TileType.Blue;
+			switch (randomType) {
+			case 1: 
+				newType = TileType.Grey;
+				break;
+			case 2: 
+				newType = TileType.Green;
+				break;
+			case 3: 
+				newType = TileType.Purple;
+				break;
+			case 4: 
+				newType = TileType.Red;
+				break;
+			case 5: 
+				newType = TileType.Yellow;
+				break;
+			}
+			return newType;
+		}
+
+		private GridPoint2[] GetTilesInColumn(int col) {
+			GridPoint2[] points = new GridPoint2[Grid.Bounds.Extreme.Y];
+			int x = 0;
+			foreach (var p in Grid) {
+				if (p.point.X == col) {
+					points [x] = p.point;
+					x++;
+				}
+			}
+			return points;
+		}
+
+		private GridPoint2 GetTopTileForColumn(int col) {
+			GridPoint2[] points = GetTilesInColumn (col);
+
+			GridPoint2 topPoint = new GridPoint2(col, -999);
+			foreach (var p in points) {
+				if (p.X > topPoint.X) {
+					topPoint = p;
+				}
+			}
+
+			return topPoint;
+		}
+
+		private GridPoint2? GetFirstClearedTileInColumn(int col) {
+			GridPoint2[] points = GetTilesInColumn (col);
+			GridPoint2? firstClearedTile = null;
+			foreach (var p in points) {
+				if (!firstClearedTile.HasValue) {
+					// firstClearedTile has not been set
+					if (TileIsCollected (p)) {
+						// this tile has been collected
+						firstClearedTile = p;
+					}
+				} else {
+					// firstClearedTile is set
+					if (TileIsCollected (p)) {
+						// this tile has been collected
+						if(p.Y < firstClearedTile.Value.Y) {
+							firstClearedTile = p;
+						}
+					}
+				}
+			}
+
+			return firstClearedTile;
+		}
+
+		private bool TileIsCollected(GridPoint2 p) {
+			return Grid [p].GetComponent<TileController> ().Collected;
+		}
 		private GridPoint2? GetNewTileTarget(List<GridPoint2> points) {
 			int oldestAge = -1;
 			GridPoint2? oldestTile = null;
@@ -176,4 +245,9 @@ namespace HexCity {
 		}
 			
 	}
+
+	public void LogClick(GridPoint2 point) {
+
+	}
+
 }
