@@ -17,7 +17,7 @@ namespace Gamelogic.Extensions
 	[Version(1)]
 //	[HelpURL("http://gamelogic.co.za/documentation/extensions/?topic=html/T-Gamelogic.Extensions.GLMonoBehaviour.htm")]
 	[AddComponentMenu("Gamelogic/Extensions/GLMonoBehaviour")]
-	public class GLMonoBehaviour : MonoBehaviour
+	 public class GLMonoBehaviour : MonoBehaviour
 	{
 		[HideInInspector]
 		public string __messageText; //TODO Remove?

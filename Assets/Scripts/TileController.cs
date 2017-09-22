@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Gamelogic.Grids2;
 namespace HexCity {
+	[RequireComponent(typeof(SpriteRenderer))]
 	public class TileController : TileCell {
 		private GameController.TileType type;
 		private GameController.TileStage stage;
@@ -26,8 +27,7 @@ namespace HexCity {
 			}
 		}
 
-		public int age = 0;
-		private bool collected = false;
+		private bool collected;
 		public bool Collected {
 			get {
 				return collected;
@@ -38,16 +38,19 @@ namespace HexCity {
 			}
 		}
 
+		public int age = 0;
 		public void UpdatePresentation() {
-			if (Collected) { 
-				gameObject.GetComponent<SpriteRenderer> ().sprite = null;
-			} else {
+			if (!collected) {
+				gameObject.GetComponent<SpriteRenderer> ().enabled = true;
 				gameObject.GetComponent<SpriteRenderer> ().sprite = gameObject.GetComponentInParent<SpriteLibrary> ().GetSprite (type, stage);
+			} else {
+				gameObject.GetComponent<SpriteRenderer> ().enabled = false;
 			}
 		}
 
 		public void IncreaseStage() {
-			stage = (GameController.TileStage)((int)stage + 1);
+			Stage = (GameController.TileStage)((int)stage + 1);
+
 		}
 	}
 }

@@ -60,7 +60,7 @@ namespace HexCity {
 		}
 
 		public void LogClick(GridPoint2 point) {
-			StartCoroutine(SearchForMatches ());
+			
 		}
 
 		private int minTilesForMatch = 3;
@@ -68,7 +68,7 @@ namespace HexCity {
 		GridPoint2? currentTile;
 		private IGrid<GridPoint2, TileController> testBoard;
 		private List<GridPoint2> collector = new List<GridPoint2>();
-		private IEnumerator SearchForMatches() {
+		public void SearchForMatches() {
 			collector.Clear ();
 			clearedTiles = false;
 			currentTile = null;
@@ -79,88 +79,28 @@ namespace HexCity {
 				if (collector.Count >= minTilesForMatch) {
 					GridPoint2? oldestTilePoint = GetNewTileTarget (collector);
 					foreach (GridPoint2 pointToClear in collector) {
-						GameObject tileClone = GameObject.Instantiate(Grid[pointToClear].gameObject, Grid[pointToClear].transform.position, Quaternion.identity);
 						if (pointToClear == oldestTilePoint) {
 							GameObject upgradedTile = Grid [pointToClear].gameObject;
 							upgradedTile.GetComponent<TileController> ().IncreaseStage ();
 							upgradedTile.transform.localScale = Vector3.zero;
 							upgradedTile.transform.DOScale (Vector3.one, 1f).SetEase (Ease.OutElastic);
-
 						} else {
-							Grid [pointToClear].GetComponent<TileController> ().Collected = true;
+							ClearTile (pointToClear);
 						}
-						tileClone.transform.DOMove(Grid[oldestTilePoint.Value].transform.position, 0.1f).SetDelay(Random.value * 0.25f).SetEase(Ease.OutCubic).OnComplete(() => {
-							Destroy(tileClone);
-						});
 					}
 					clearedTiles = true;
 				}
 				currentTile = null;
 				collector.Clear ();
-//				yield return null;
 			}
 
 			if (clearedTiles) {
-				yield return StartCoroutine (Settle ());
 			}
 		}
 
-		private GridPoint2? firstEmpty;
-		private List<GridPoint2> fallingBlocks = new List<GridPoint2> ();
-		private IEnumerator Settle() {
-//			fallingBlocks.Clear ();
-//			foreach (var p in dataGrid) {
-//				if (p.cell.collected && !firstEmpty.HasValue) {
-//					firstEmpty = p.point;
-//				} else if (firstEmpty.HasValue && !p.cell.collected) {
-//					fallingBlocks.Add (p.point);
-////					TileController firstController = dataGrid [new GridPoint2 (p.point.X, firstEmpty.Value)].gameObject.GetComponent<TileController> ();
-////					TileController thisController = Grid[p.point].GetComponent<TileController> ();
-////					firstController.stage = thisController.stage;
-////					firstController.age = thisController.age;
-////					firstController.type = thisController.type;
-//					if (dataGrid.Contains(new GridPoint2(p.point.X, firstEmpty.Value.Y))) {
-//						Transform myT = dataGrid [new GridPoint2 (p.point.X, firstEmpty.Value.Y)].transform;
-//						dataGrid [new GridPoint2 (p.point.X, firstEmpty.Value.Y)] = dataGrid [p.point];
-////						dataGrid [p.point].transform.DOMove (, 0.25f).SetEase (Ease.InOutQuad);
-////					dataGrid [new GridPoint2 (p.point.X, firstEmpty.Value)].GetComponent<SpriteRenderer> ().sprite = p.cell.GetComponent<SpriteRenderer> ().sprite;
-//
-//						firstEmpty = new GridPoint2 (firstEmpty.Value.X, firstEmpty.Value.Y + 1);
-//					}
-//			
-//
-//				}
-//			}
-//			if (fallingBlocks.Count > 0) {
-//				foreach (GridPoint2 fallingBlock in fallingBlocks) {
-//					Transform currentTranform = dataGrid [fallingBlock].transform;
-////					currentTranform.DOMove(new Vector3(currentTranform.position.x, dataGrid[fallingBlock].last
-//				}
-//			}
-
-			fallingBlocks.Clear ();
-			foreach (var p in Grid) {
-				TileController thisController = Grid [p.point].GetComponent<TileController> ();
-				if (thisController.Collected && !firstEmpty.HasValue) {
-					// If we dont have an empty cell for this column yet, and this cell is marked as empty
-					firstEmpty = p.point;
-				}else if (firstEmpty.HasValue && thisController.Collected){
-					// We have an empty cell below this cell, and this cell is marked as collected
-					// Add this cell to fallingBLocks, so that it can be animated
-					fallingBlocks.Add(p.point);
-					// copy this cell to the first empty cell we found
-					CopyCellToCell(p.point, firstEmpty.Value);
-					// Mark the copied over cell to not have been collected, so we don't trip over it later
-//					MarkCellUncollected(firstEmpty.Value);
-					// Finally change firstEmpty to this cell
-					firstEmpty = p.point;
-				}
-
-			}
-			yield return null;
-
+		private void ClearTile(GridPoint2 gp) {
+			Grid [gp].GetComponent<TileController> ().Collected = true;
 		}
-
 		private void TestTile(GridPoint2 p) {
 			if (testBoard [p] == null) {
 				return;
@@ -185,8 +125,39 @@ namespace HexCity {
 				TestTile (neighborPoint);
 			}
 		}
-			
 
+		private GridPoint2?[] firstXEmpty;
+		public void Settle() {
+			InitClearedArray ();
+			foreach (var p in Grid) {
+				TileController tileController = p.cell.GetComponent<TileController> ();
+				if (!firstXEmpty [p.point.X].HasValue && tileController.Collected) {
+					// There is not am empty cell below me, and I am empty
+					firstXEmpty [p.point.X] = p.point;
+				}
+				else if (firstXEmpty [p.point.X].HasValue && !tileController.Collected) {
+					// There is an empty cell below me, and I am not empty
+					TileController newController = Grid [firstXEmpty [p.point.X].Value].gameObject.GetComponent<TileController> ();
+					newController.age = tileController.age;
+					newController.Type = tileController.Type;
+					newController.Stage = tileController.Stage;
+					newController.Collected = false;
+					ClearTile (p.point);
+					// And then increment the firstXEmtpy's point's Y
+					GridPoint2 newPoint = new GridPoint2 (p.point.X, firstXEmpty [p.point.X].Value.Y + 1);
+					firstXEmpty [p.point.X] = newPoint;
+				}
+			}
+		}
+
+		private void InitClearedArray() {
+			firstXEmpty = new GridPoint2?[Grid.Bounds.Extreme.X];
+			for (int x = 0; x < Grid.Bounds.Extreme.X; x++) {
+				firstXEmpty [x] = null;
+			}
+		}
+
+			
 		private GridPoint2? GetNewTileTarget(List<GridPoint2> points) {
 			int oldestAge = -1;
 			GridPoint2? oldestTile = null;
@@ -203,17 +174,6 @@ namespace HexCity {
 		private int GetAgeForPoint(GridPoint2 p) {
 			return Grid[p].GetComponent<TileController>().age;
 		}
-
-		private void CopyCellToCell(GridPoint2 a, GridPoint2 b) {
-			TileController aController = Grid [a].GetComponent<TileController> (),
-			bController = Grid [b].GetComponent<TileController> ();
-			bController.age = aController.age;
-			bController.Type = aController.Type;
-			bController.Stage = aController.Stage;
-		}
-
-		private void MarkCellUncollected(GridPoint2 cell) {
-			Grid [cell].GetComponent<TileController>().Collected = false;
-		}
+			
 	}
 }
