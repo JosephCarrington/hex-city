@@ -28,10 +28,19 @@ namespace HexCity {
 			Urban,
 			Max
 		}
+
+		public enum GameState {
+			Idle,
+			Collecting,
+			Falling,
+			Interacting
+		}
+
+		private GameState state = GameState.Idle;
 			
 		public override void InitGrid() {
 			DOTween.Init ();
-			Random.InitState (seed);
+//			Random.InitState (seed);
 
 			foreach(var point in Grid) {
 				point.cell.gameObject.name = point.point.ToString ();
@@ -46,7 +55,8 @@ namespace HexCity {
 		GridPoint2? currentTile;
 		private IGrid<GridPoint2, TileController> testBoard;
 		private List<GridPoint2> collector = new List<GridPoint2>();
-		public void SearchForMatches() {
+		public IEnumerator SearchForMatches() {
+			state = GameState.Collecting;
 			collector.Clear ();
 			clearedTiles = false;
 			currentTile = null;
@@ -71,8 +81,11 @@ namespace HexCity {
 				currentTile = null;
 				collector.Clear ();
 			}
-
+			yield return new WaitForSeconds (1f);
 			if (clearedTiles) {
+				yield return StartCoroutine(Settle ());
+			} else {
+				state = GameState.Idle;
 			}
 		}
 
@@ -106,7 +119,8 @@ namespace HexCity {
 
 		private GridPoint2?[] firstXEmpty;
 
-		public void Settle() {
+		public IEnumerator Settle() {
+			state = GameState.Falling;
 			InitClearedArray ();
 			foreach (var p in Grid) {
 				TileController tileController = p.cell.GetComponent<TileController> ();
@@ -127,7 +141,10 @@ namespace HexCity {
 					firstXEmpty [p.point.X] = newPoint;
 				}
 			}
+			yield return new WaitForSeconds (1f);
 			AddNewTilesAtTop ();
+			yield return new WaitForSeconds (1f);
+			yield return StartCoroutine(SearchForMatches ());
 		}
 
 		private void InitClearedArray() {
@@ -228,12 +245,12 @@ namespace HexCity {
 			return Grid [p].GetComponent<TileController> ().Collected;
 		}
 		private GridPoint2? GetNewTileTarget(List<GridPoint2> points) {
-			int oldestAge = -1;
+			int youngestAge = 999999;
 			GridPoint2? oldestTile = null;
 			foreach (GridPoint2 p in points) {
 				int myAge = GetAgeForPoint (p);
-				if (myAge > oldestAge) {
-					oldestAge = myAge;
+				if (myAge < youngestAge) {
+					youngestAge = myAge;
 					oldestTile = p;
 				}
 			}
@@ -243,11 +260,118 @@ namespace HexCity {
 		private int GetAgeForPoint(GridPoint2 p) {
 			return Grid[p].GetComponent<TileController>().age;
 		}
+
+		public void DeselectCenterTile(GridPoint2 p) {
+			state = GameState.Idle;
+			UnhighlightTile (selectedCenterTile);
+			foreach (GridPoint2 np in selectedNeighborTiles) {
+				Grid [np].GetComponent<TileController> ().UpdatePresentation ();
+			}
+			foreach (GameObject sprite in neighborSprites) {
+				// Copy each tile to the tile it overlaps in grid
+
+
+
+				GridPoint2 overlappedTile = GridMap.WorldToGridToDiscrete(sprite.transform.position - transform.position);
+				if (Grid.Contains (overlappedTile)) {
+					CopyTileToTile (sprite.GetComponent<TileController> (), Grid [overlappedTile].GetComponent<TileController> ());
+					// Make it young again
+					Grid [overlappedTile].GetComponent<TileController> ().age = -1;
+				}
+
+			}
+			Destroy (neighborSpriteContainer);
+			initialAngle = null;
+			IncreaseAgeForAllTiles ();
+			StartCoroutine(SearchForMatches ());
+		}
+
+		GridPoint2 selectedCenterTile;
+		GridPoint2[] selectedNeighborTiles;
+		GameObject[] neighborSprites;
+		GameObject neighborSpriteContainer;
+		public void SelectCenterTileForMovement(GridPoint2 p) {
+			if (state != GameState.Idle) {
+				return;
+			}
+			StructList<GridPoint2> neighbors = PointyHexPoint.GetOrthogonalNeighbors (p).In (Grid).ToStructList();
+			if (neighbors.Count == 6) {
+				state = GameState.Interacting;
+				// point is surrounde dby neighbors, and is as such can be rotated around
+				selectedCenterTile = p;
+				selectedNeighborTiles = new GridPoint2[6];
+				HighlightTile (p);
+				int x = 0;
+				foreach (GridPoint2 np in neighbors) {
+					selectedNeighborTiles [x] = np;
+					x++;
+				}
+				neighborSprites = new GameObject[6];
+				neighborSpriteContainer = new GameObject ();
+				neighborSpriteContainer.name = "Tile Rotator";
+				neighborSpriteContainer.transform.position = Grid [p].transform.position;
+				x = 0;
+				foreach (GridPoint2 np in selectedNeighborTiles) {
+					neighborSprites [x] = GameObject.Instantiate (Grid [np].gameObject, gameObject.transform);
+					CopyTileToTile (Grid [np].gameObject.GetComponent<TileController> (), neighborSprites [x].GetComponent<TileController> ());
+					neighborSprites [x].transform.parent = neighborSpriteContainer.transform;
+					Grid [np].GetComponent<TileController> ().Hide ();
+					neighborSprites[x].transform.DOScale(Vector3.one * 1.2f, 0.25f).SetEase(Ease.OutSine).SetDelay(x * 0.025f);
+					x++;
+				}
+			}
+		}
+
+		private void HighlightTile(GridPoint2 p) {
+			Grid [p].gameObject.transform.DOScale (Vector3.one * 1.2f, 0.25f).SetEase(Ease.OutSine);
+		}
+
+		private void HighlightTile(GridPoint2 p, float delay) {
+			Grid [p].gameObject.transform.DOScale (Vector3.one * 1.2f, 0.25f).SetEase(Ease.OutSine).SetDelay(delay);
+		}
+
+		private void UnhighlightTile(GridPoint2 p) {
+			Grid [p].gameObject.transform.DOKill (true);
+			Grid [p].gameObject.transform.DOScale (Vector3.one, 0.1f);
+		}
+
+		float? initialAngle;
+		public void Update() {
+			if(Input.GetKeyDown(KeyCode.Q)) {
+				Debug.Break ();
+			}
+			float minDistanceToStartMovement = 1f;
+			if (state == GameState.Interacting) {
+				Vector3 centerPos = Grid [selectedCenterTile].gameObject.transform.position;
+				Vector2 mousePos = Camera.main.ScreenToWorldPoint (Input.mousePosition);
+				Debug.DrawLine (centerPos, mousePos);
+				if (Vector2.Distance (centerPos, mousePos) > minDistanceToStartMovement) {
+					if (!initialAngle.HasValue) {
+						initialAngle = Vector2.SignedAngle (Vector2.up, Grid [selectedCenterTile].gameObject.transform.position - Camera.main.ScreenToWorldPoint (Input.mousePosition));
+					}
+					float currentAngle = Vector2.SignedAngle (Vector2.up, Grid [selectedCenterTile].gameObject.transform.position - Camera.main.ScreenToWorldPoint (Input.mousePosition));
+					float angle = currentAngle - initialAngle.Value;
+					neighborSpriteContainer.transform.rotation = Quaternion.AngleAxis (angle, neighborSpriteContainer.transform.forward);
+					foreach (GameObject sprite in neighborSprites) {
+						sprite.transform.rotation = Quaternion.Euler (Vector3.zero);
+					}
+//					print (Mathf.Round (angle / 60f));
+				}
+			}
+		}
+
+		private void IncreaseAgeForAllTiles() {
+			foreach (var p in Grid) {
+				p.cell.GetComponent<TileController> ().age++;
+			}
+		}
+
+		private void CopyTileToTile(TileController a, TileController b) {
 			
+			b.Stage = a.Stage;
+			b.Type = a.Type;
+			b.age = a.age;
+			b.UpdatePresentation ();
+		}
 	}
-
-	public void LogClick(GridPoint2 point) {
-
-	}
-
 }

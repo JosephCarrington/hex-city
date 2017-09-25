@@ -17,6 +17,8 @@ namespace Gamelogic.Grids2
 
 		[SerializeField]
 		private GridEvent onLeftMouseButtonDown;
+		[SerializeField]
+		private GridEvent onLeftMouseButtonUp;
 
 		[SerializeField]
 		private GridEvent onRightMouseButtonDown;
@@ -64,6 +66,23 @@ namespace Gamelogic.Grids2
 
 		/// <summary>
 		/// Gets the GridEvent associate with clicking
+		/// the left mouse button.
+		/// </summary>
+		public GridEvent OnLeftMouseButtonUp
+		{
+			get
+			{
+				if (onLeftMouseButtonUp == null)
+				{
+					onLeftMouseButtonUp = new GridEvent();
+				}
+
+				return onLeftMouseButtonUp;
+			}
+		}
+
+		/// <summary>
+		/// Gets the GridEvent associate with clicking
 		/// the right mouse button.
 		/// </summary>
 		public GridEvent OnRightMouseButtonDown
@@ -95,6 +114,14 @@ namespace Gamelogic.Grids2
 					{
 						onLeftMouseButtonDown.Invoke(MousePosition);
 					}
+				}
+			}
+
+			if (Input.GetMouseButtonUp(0))
+			{
+				if (onLeftMouseButtonUp != null)
+				{
+					onLeftMouseButtonUp.Invoke(MousePosition);
 				}
 			}
 

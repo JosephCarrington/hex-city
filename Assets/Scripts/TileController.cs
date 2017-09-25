@@ -52,5 +52,9 @@ namespace HexCity {
 			Stage = (GameController.TileStage)((int)stage + 1);
 
 		}
+
+		public void Hide() {
+			gameObject.GetComponent<SpriteRenderer> ().enabled = false;
+		}
 	}
 }
