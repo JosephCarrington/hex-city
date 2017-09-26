@@ -6,6 +6,7 @@ using DG.Tweening;
 
 namespace HexCity {
 	public class GameController : GridBehaviour<GridPoint2, TileCell> {
+		public float speedScale = 1f;
 		public int seed = 1;
 
 		// Use this for initialization
@@ -71,8 +72,10 @@ namespace HexCity {
 							GameObject upgradedTile = Grid [pointToClear].gameObject;
 							upgradedTile.GetComponent<TileController> ().IncreaseStage ();
 							upgradedTile.transform.localScale = Vector3.zero;
-							upgradedTile.transform.DOScale (Vector3.one, 1f).SetEase (Ease.OutElastic);
+							upgradedTile.transform.DOScale (Vector3.one, 1f * speedScale).SetEase (Ease.OutElastic);
 						} else {
+							GameObject clone = GameObject.Instantiate (Grid [pointToClear].gameObject);
+							clone.transform.DOMove (Grid [oldestTilePoint.Value].transform.position, 0.25f * speedScale).SetEase (Ease.OutSine).OnComplete(() => Destroy(clone));
 							ClearTile (pointToClear);
 						}
 					}
@@ -81,7 +84,7 @@ namespace HexCity {
 				currentTile = null;
 				collector.Clear ();
 			}
-			yield return new WaitForSeconds (1f);
+			yield return new WaitForSeconds (0.25f * speedScale);
 			if (clearedTiles) {
 				yield return StartCoroutine(Settle ());
 			} else {
@@ -131,9 +134,8 @@ namespace HexCity {
 				else if (firstXEmpty [p.point.X].HasValue && !tileController.Collected) {
 					// There is an empty cell below me, and I am not empty
 					TileController newController = Grid [firstXEmpty [p.point.X].Value].gameObject.GetComponent<TileController> ();
-					newController.age = tileController.age;
-					newController.Type = tileController.Type;
-					newController.Stage = tileController.Stage;
+					CopyTileToTile (tileController, newController);
+					Grid [firstXEmpty [p.point.X].Value].transform.DOMove (p.cell.transform.position, 0.25f * speedScale).From ().SetEase(Ease.InQuad);
 					newController.Collected = false;
 					ClearTile (p.point);
 					// And then increment the firstXEmtpy's point's Y
@@ -141,9 +143,9 @@ namespace HexCity {
 					firstXEmpty [p.point.X] = newPoint;
 				}
 			}
-			yield return new WaitForSeconds (1f);
+			yield return new WaitForSeconds (1f * speedScale);
 			AddNewTilesAtTop ();
-			yield return new WaitForSeconds (1f);
+			yield return new WaitForSeconds (1f * speedScale);
 			yield return StartCoroutine(SearchForMatches ());
 		}
 
@@ -164,6 +166,7 @@ namespace HexCity {
 					tileController.Stage = TileStage.Empty;
 					tileController.Type = GetRandomTileType ();
 					tileController.Collected = false;
+					Grid [firstClearedTile.Value].transform.DOScale (Vector3.zero, ((0.25f + Random.value) * speedScale)).From ().SetEase(Ease.OutElastic);
 					firstClearedTile = GetFirstClearedTileInColumn (x);
 				}
 			}
@@ -261,19 +264,22 @@ namespace HexCity {
 			return Grid[p].GetComponent<TileController>().age;
 		}
 
-		public void DeselectCenterTile(GridPoint2 p) {
-			state = GameState.Idle;
+
+		public void StartDeselect(GridPoint2 p) {
+			StartCoroutine(DeselectCenterTile(p));
+		}
+		public IEnumerator DeselectCenterTile(GridPoint2 p) {
 			UnhighlightTile (selectedCenterTile);
-			foreach (GridPoint2 np in selectedNeighborTiles) {
-				Grid [np].GetComponent<TileController> ().UpdatePresentation ();
-			}
 			foreach (GameObject sprite in neighborSprites) {
 				// Copy each tile to the tile it overlaps in grid
-
-
-
 				GridPoint2 overlappedTile = GridMap.WorldToGridToDiscrete(sprite.transform.position - transform.position);
 				if (Grid.Contains (overlappedTile)) {
+					Grid [overlappedTile].GetComponent<TileController> ().Hide ();
+
+
+					sprite.transform.DOMove (Grid [overlappedTile].transform.position, 0.25f * speedScale).SetEase (Ease.OutBack);
+					sprite.GetComponent<SpriteRenderer> ().DOColor (new Color (1, 1, 1, 0), 0.1f * speedScale);
+					yield return new WaitForSeconds (0.05f * speedScale);
 					CopyTileToTile (sprite.GetComponent<TileController> (), Grid [overlappedTile].GetComponent<TileController> ());
 					// Make it young again
 					Grid [overlappedTile].GetComponent<TileController> ().age = -1;
@@ -316,23 +322,23 @@ namespace HexCity {
 					CopyTileToTile (Grid [np].gameObject.GetComponent<TileController> (), neighborSprites [x].GetComponent<TileController> ());
 					neighborSprites [x].transform.parent = neighborSpriteContainer.transform;
 					Grid [np].GetComponent<TileController> ().Hide ();
-					neighborSprites[x].transform.DOScale(Vector3.one * 1.2f, 0.25f).SetEase(Ease.OutSine).SetDelay(x * 0.025f);
+					neighborSprites[x].transform.DOScale(Vector3.one * 1.2f, 0.25f * speedScale).SetEase(Ease.OutSine).SetDelay(x * 0.025f * speedScale);
 					x++;
 				}
 			}
 		}
 
 		private void HighlightTile(GridPoint2 p) {
-			Grid [p].gameObject.transform.DOScale (Vector3.one * 1.2f, 0.25f).SetEase(Ease.OutSine);
+			Grid [p].gameObject.transform.DOScale (Vector3.one * 1.2f, 0.25f * speedScale).SetEase(Ease.OutSine);
 		}
 
 		private void HighlightTile(GridPoint2 p, float delay) {
-			Grid [p].gameObject.transform.DOScale (Vector3.one * 1.2f, 0.25f).SetEase(Ease.OutSine).SetDelay(delay);
+			Grid [p].gameObject.transform.DOScale (Vector3.one * 1.2f, 0.25f * speedScale).SetEase(Ease.OutSine).SetDelay(delay);
 		}
 
 		private void UnhighlightTile(GridPoint2 p) {
 			Grid [p].gameObject.transform.DOKill (true);
-			Grid [p].gameObject.transform.DOScale (Vector3.one, 0.1f);
+			Grid [p].gameObject.transform.DOScale (Vector3.one, 0.1f * speedScale);
 		}
 
 		float? initialAngle;
